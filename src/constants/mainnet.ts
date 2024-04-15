@@ -1,5 +1,3 @@
-import { TestInterface } from "./interface";
-
-export const mainnetInfo: TestInterface = {
+export const mainnetInfo = {
   key: "value",
 };

@@ -1,5 +1,3 @@
-import { TestInterface } from "./interface";
-
-export const testnetInfo: TestInterface = {
+export const testnetInfo = {
   key: "value",
 };

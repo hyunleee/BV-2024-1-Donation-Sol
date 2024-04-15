@@ -1,5 +1,4 @@
-import { TestInterface } from "./interface";
-
-export const localInfo: TestInterface = {
-  key: "value",
+export const hardhatInfo = {
+  daoTokenName: "DAO Token",
+  daoTokenSymbol: "DTT",
 };

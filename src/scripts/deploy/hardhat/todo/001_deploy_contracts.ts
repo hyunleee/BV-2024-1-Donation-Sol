@@ -1,3 +1,4 @@
+import { hardhatInfo } from "@constants";
 import { ethers } from "hardhat";
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
@@ -14,10 +15,10 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
   const { deploy } = deployments;
   const [developer] = await ethers.getSigners();
 
-  await deploy("NameCard", {
+  await deploy("DaoToken", {
     from: developer.address,
-    contract: "NameCard",
-    args: [],
+    contract: "DaoToken",
+    args: [hardhatInfo.daoTokenName, hardhatInfo.daoTokenSymbol],
     log: true,
     autoMine: true,
   });

@@ -42,5 +42,6 @@
   "prettier.configPath": ".prettierrc",
   "prettier.printWidth": 120,
   "prettier.trailingComma": "all",
-  "cSpell.words": ["nomiclabs", "typechain", "typechains"]
+  "cSpell.words": ["nomiclabs", "typechain", "typechains"],
+  "solidity.compileUsingRemoteVersion": "v0.8.19+commit.7dd6d404"
 }
