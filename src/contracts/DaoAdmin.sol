@@ -14,6 +14,6 @@ contract DaoAdmin {
     // 토큰을 민트하는 함수
     function mintTokens(address to, uint256 amount) public {
         require(msg.sender == admin, "Only the admin can mint tokens");
-        tokenContract.mint(to, amount);
+        tokenContract.mintTokens(to, amount); // DaoToken 컨트랙트의 mintTokens 함수 호출
     }
 }

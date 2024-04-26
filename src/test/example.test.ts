@@ -1,6 +1,8 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/dist/src/signers";
 import { setup } from "./setup";
 import { DaoToken } from "@typechains";
+import { Funding } from "@typechains";
+import { DaoAdmin } from "@typechains";
 import { expect } from "chai";
 import { BigNumber } from "ethers";
 import { ethers, network } from "hardhat";

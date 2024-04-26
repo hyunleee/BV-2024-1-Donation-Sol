@@ -5,9 +5,16 @@ import "hardhat/console.sol";
 
 contract DaoToken is ERC20 {
     address public owner;
+    address public admin;
 
     constructor(string memory name, string memory symbol) ERC20(name, symbol) {
         owner = msg.sender;
+        admin = msg.sender; // admin을 컨트랙트 생성자 호출자로 설정
+    }
+
+    function mintTokens(address to, uint256 amount) public {
+        require(msg.sender == admin, "Only the admin can mint tokens");
+        _mint(to, amount);
     }
 
     function transfer(address targetAddr, uint256 amount) public virtual override returns (bool) {
