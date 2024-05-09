@@ -1,4 +1,4 @@
-import { DaoToken } from "@typechains";
+import { DaoAdmin, DaoToken, Funding } from "@typechains";
 import { deployments, ethers } from "hardhat";
 
 export const setup = async () => {
@@ -9,6 +9,8 @@ export const setup = async () => {
   await deployments.fixture(["DaoToken"]);
   const contracts = {
     daoToken: await ethers.getContract<DaoToken>("DaoToken"),
+    funding: await ethers.getContract<Funding>("Funding"),
+    daoAdmin: await ethers.getContract<DaoAdmin>("DaoAdmin"),
   };
 
   return {
