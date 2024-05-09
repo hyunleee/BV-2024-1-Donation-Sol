@@ -6,7 +6,7 @@ export const setup = async () => {
   const [admin, ...users] = await ethers.getSigners();
 
   /* 컨트랙트 데이터 설정: deployments.fixture를 통하여 hardhat 환경에 배포된 컨트랙트 정보를 가져온다. */
-  await deployments.fixture(["DaoToken"]);
+  await deployments.fixture(["DaoToken", "Funding", "DaoAdmin"]); // Funding 컨트랙트도 배포
   const contracts = {
     daoToken: await ethers.getContract<DaoToken>("DaoToken"),
     funding: await ethers.getContract<Funding>("Funding"),

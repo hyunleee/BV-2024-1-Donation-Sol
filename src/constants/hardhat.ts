@@ -1,4 +1,6 @@
+import { faker } from "@faker-js/faker";
+
 export const hardhatInfo = {
-  daoTokenName: "DAO Token",
-  daoTokenSymbol: "DTT",
+  daoTokenName: "TestToken",
+  daoTokenSymbol: "TT",
 };

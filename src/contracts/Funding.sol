@@ -18,7 +18,6 @@ contract Funding {
         donationAdmin = msg.sender;
         daoToken = IERC20(daoTokenAddr);
     }
-
     function setDaoToken(address newDaoTokenAddr) external {
         require(msg.sender == donationAdmin, "Access denied");
         daoToken = IERC20(newDaoTokenAddr);

@@ -15,13 +15,37 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
   const { deploy } = deployments;
   const [developer] = await ethers.getSigners();
 
-  await deploy("DaoToken", {
+  // DaoToken 컨트랙트 배포
+  const daoToken = await deploy("DaoToken", {
     from: developer.address,
     contract: "DaoToken",
     args: [hardhatInfo.daoTokenName, hardhatInfo.daoTokenSymbol],
     log: true,
     autoMine: true,
   });
+
+  // Funding 컨트랙트 배포
+  const funding = await deploy("Funding", {
+    from: developer.address,
+    contract: "Funding",
+    args: [daoToken.address], // 배포된 DaoToken 컨트랙트의 주소 사용
+    log: true,
+    autoMine: true,
+  });
+
+  // DaoAdmin 컨트랙트 배포
+  const daoAdmin = await deploy("DaoAdmin", {
+    from: developer.address,
+    contract: "DaoAdmin",
+    args: [daoToken.address], // 배포된 DaoToken 컨트랙트의 주소 사용
+    log: true,
+    autoMine: true,
+  });
+
+  // 배포된 컨트랙트의 주소 출력
+  console.log("DaoToken deployed to:", daoToken.address);
+  console.log("Funding deployed to:", funding.address);
+  console.log("DaoAdmin deployed to:", daoAdmin.address);
 };
 
 export default func;
