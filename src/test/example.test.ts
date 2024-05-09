@@ -66,28 +66,26 @@ describe("다오토큰 컨트랙트 테스트", () => {
     const [user] = users;
     const donationAmount = ethers.utils.parseEther("10");
 
-    // Approve tokens for the user
     await daoToken.connect(admin).mintTokens(user.address, donationAmount);
     expect(await daoToken.balanceOf(user.address)).to.equal(donationAmount);
 
-    // Request donation
     await funding.connect(user).requestDonation(donationAmount);
 
-    // Check if pending donation is set correctly
     const userPendingDonation = await funding.pendingDonations(user.address);
     expect(userPendingDonation).to.equal(donationAmount);
 
-    // Check if DonationRequested event is emitted
-    // const donationRequestedEvents = await funding.queryFilter("DonationRequested");
     const donationRequestedEvents = await funding.queryFilter(funding.filters.DonationRequested());
     expect(donationRequestedEvents.length).to.equal(1);
+
     const [event] = donationRequestedEvents;
     expect(event.args.donor).to.equal(user.address);
     expect(event.args.amount).to.equal(donationAmount);
   });
 
   //펀딩 승인 시 잔량 확인
+  it("펀딩 승인 시 잔량 확인", async () => {});
   //펀딩 거절 시 맵핑에서 삭제 됐는지 확인
-
+  it("펀딩 승인 시 잔량 확인", async () => {});
   //관리자 첫 토큰 민트 받았는지 확인
+  it("펀딩 승인 시 잔량 확인", async () => {});
 });
