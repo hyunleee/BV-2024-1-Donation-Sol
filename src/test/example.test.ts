@@ -28,7 +28,7 @@ describe("다오토큰 컨트랙트 테스트", () => {
     // 여기서 토큰을 발행
     const [user] = users;
     const initialSupply = ethers.utils.parseEther("10000"); // 예시 발행량
-    await daoToken.connect(admin).mintTokens(user.address, initialSupply);
+    await daoToken.connect(admin).mint(user.address, initialSupply);
   });
 
   beforeEach(async () => {
@@ -71,7 +71,7 @@ describe("다오토큰 컨트랙트 테스트", () => {
 
     // 초기 잔액 확인 및 토큰 민트
     const initialBalance = await daoToken.balanceOf(user.address);
-    await daoToken.connect(admin).mintTokens(user.address, donationAmount);
+    await daoToken.connect(admin).mint(user.address, donationAmount);
     const postMintBalance = await daoToken.balanceOf(user.address);
     expect(postMintBalance).to.equal(initialBalance.add(donationAmount));
 
@@ -94,7 +94,7 @@ describe("다오토큰 컨트랙트 테스트", () => {
 
     // 초기 잔액 확인 및 토큰 민트
     const initialBalance = await daoToken.balanceOf(user.address);
-    await daoToken.connect(admin).mintTokens(user.address, donationAmount); // 토큰 민트
+    await daoToken.connect(admin).mint(user.address, donationAmount); // 토큰 민트
     const postMintBalance = await daoToken.balanceOf(user.address);
     expect(postMintBalance).to.equal(initialBalance.add(donationAmount));
 
@@ -120,7 +120,7 @@ describe("다오토큰 컨트랙트 테스트", () => {
 
     // 초기 잔액 확인 및 토큰 민트
     const initialBalance = await daoToken.balanceOf(user.address);
-    await daoToken.connect(admin).mintTokens(user.address, donationAmount);
+    await daoToken.connect(admin).mint(user.address, donationAmount);
     const postMintBalance = await daoToken.balanceOf(user.address);
     expect(postMintBalance).to.equal(initialBalance.add(donationAmount));
 
@@ -144,7 +144,7 @@ describe("다오토큰 컨트랙트 테스트", () => {
     console.log("Initial Balance:", initialBalance.toString()); // 디버깅 출력
 
     // 관리자가 토큰 민트
-    await daoToken.connect(admin).mintTokens(user.address, donationAmount);
+    await daoToken.connect(admin).mint(user.address, donationAmount);
 
     // 민트 후 잔액 확인
     const postMintBalance = await daoToken.balanceOf(user.address);
