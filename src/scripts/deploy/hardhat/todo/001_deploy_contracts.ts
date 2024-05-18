@@ -33,7 +33,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   // Users 배포
   const users = await deploy("Users", {
     from: deployer,
-    args: [dao.address], // Dao 주소 전달
+    args: [dao.address, daoToken.address], // Dao 주소 전달
     log: true,
   });
   console.log("Users deployed at:", users.address);
@@ -41,7 +41,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
   // DaoAdmin 배포
   const daoAdmin = await deploy("DaoAdmin", {
     from: deployer,
-    args: [daoToken.address, users.address], // Users 컨트랙트 주소를 전달
+    args: [daoToken.address, users.address], // 두 개의 인자 전달
     log: true,
   });
   console.log("DaoAdmin deployed at:", daoAdmin.address);
