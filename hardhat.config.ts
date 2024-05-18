@@ -33,7 +33,28 @@ const config: HardhatUserConfig = {
   },
   namedAccounts: {
     deployer: {
-      default: 0, // 이 부분이 중요합니다. 0번째 계정을 deployer로 설정합니다.
+      default: 0,
+    },
+    user1: {
+      default: 1,
+    },
+    user2: {
+      default: 2,
+    },
+    member1: {
+      default: 3,
+    },
+    member2: {
+      default: 4,
+    },
+    member3: {
+      default: 5,
+    },
+    member4: {
+      default: 6,
+    },
+    member5: {
+      default: 7,
     },
   },
   networks: {
@@ -42,7 +63,7 @@ const config: HardhatUserConfig = {
       tags: ["hardhat", "test"],
       chainId: 1337,
     },
-    // replace with your network configuration
+    // 예시 네트워크 설정입니다.
     // testnet: {
     //   url: PROVIDER_URL || "",
     //   chainId: +(CHAIN_ID || 0),

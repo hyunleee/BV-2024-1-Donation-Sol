@@ -1,19 +1,23 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.19;
 
-import "./DaoToken.sol";
-import "./Donation.sol";
+import "./interface/DaoTokenInterface.sol";
+import "./interface/UsersInterface.sol";
+import "./interface/DaoInterface.sol";
+import "./interface/DonationInterface.sol";
 
-contract Dao {
-    IERC20 public daoToken;
-    address public donationContract;
+contract Dao is DaoInterface {
+    DaoTokenInterface public daoToken;
+    UsersInterface public usersContract;
+    DonationInterface public donationContract;
+    address public admin;
     uint256 public voteDuration;
 
     event VoteStarted(uint256 indexed campaignId, uint256 endTime);
     event Voted(uint256 indexed campaignId, address indexed voter, bool vote);
     event VoteEnded(uint256 indexed campaignId, bool approved);
-    event UserRegistered(address indexed user);
-    event UserUnregistered(address indexed user);
+    event DaoMembershipApproved(address indexed user);
+    event DaoMembershipRejected(address indexed user);
 
     struct VoteInfo {
         uint256 startTime;
@@ -24,16 +28,39 @@ contract Dao {
         mapping(address => bool) hasVoted;
     }
     mapping(uint256 => VoteInfo) public votes;
-    mapping(address => bool) public registeredUsers;
 
-    constructor(address _daoToken, address _donationContract, uint256 _voteDuration) {
-        daoToken = IERC20(_daoToken);
-        donationContract = _donationContract;
+    constructor(address _daoToken, address _donationContract, address _usersContract, uint256 _voteDuration) {
+        admin = msg.sender;
+        daoToken = DaoTokenInterface(_daoToken);
+        donationContract = DonationInterface(_donationContract);
+        usersContract = UsersInterface(_usersContract);
         voteDuration = _voteDuration;
     }
 
-    function startVote(uint256 _campaignId) external {
-        (, , uint256 goal, , , , ) = Donation(donationContract).getCampaign(_campaignId);
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Only the admin can perform this action");
+        _;
+    }
+
+    modifier onlyDaoMember() {
+        require(usersContract.isApprovedUser(msg.sender), "Only DAO members can perform this action");
+        _;
+    }
+
+    // Dao membership approval and rejection
+    function approveDaoMembership(address _user) external override onlyAdmin {
+        usersContract.approveDaoMembership(_user);
+        emit DaoMembershipApproved(_user);
+    }
+
+    function rejectDaoMembership(address _user) external override onlyAdmin {
+        usersContract.rejectDaoMembership(_user);
+        emit DaoMembershipRejected(_user);
+    }
+
+    // Voting functions
+    function startVote(uint256 _campaignId) external override onlyDaoMember {
+        uint256 goal = donationContract.getCampaignGoal(_campaignId);
         require(goal > 0, "Campaign does not exist");
         require(votes[_campaignId].startTime == 0, "Vote already started");
 
@@ -49,7 +76,7 @@ contract Dao {
         emit VoteStarted(_campaignId, endTime);
     }
 
-    function vote(uint256 _campaignId, bool _support) external returns (bool) {
+    function vote(uint256 _campaignId, bool _support) external onlyDaoMember returns (bool) {
         VoteInfo storage voteInfo = votes[_campaignId];
         require(block.timestamp >= voteInfo.startTime, "Vote not started");
         require(block.timestamp <= voteInfo.endTime, "Vote ended");
@@ -72,7 +99,7 @@ contract Dao {
         return false;
     }
 
-    function finalizeVote(uint256 _campaignId) internal returns (bool) {
+    function finalizeVote(uint256 _campaignId) public override returns (bool) {
         VoteInfo storage voteInfo = votes[_campaignId];
         require(block.timestamp > voteInfo.endTime, "Vote not ended");
 
@@ -84,19 +111,28 @@ contract Dao {
         return approved;
     }
 
-    function registerUser(address _user) external {
-        require(!registeredUsers[_user], "User already registered");
-        registeredUsers[_user] = true;
-        emit UserRegistered(_user);
+    // User registration functions
+    function registerUser(address _user) external override {
+        usersContract.registerUser(_user);
     }
 
-    function unregisterUser(address _user) internal {
-        require(registeredUsers[_user], "User not registered");
-        registeredUsers[_user] = false;
-        emit UserUnregistered(_user);
+    function unregisterUser(address _user) public override {
+        usersContract.unregisterUser(_user);
     }
 
     function requestUnregister() external {
         unregisterUser(msg.sender);
+    }
+
+    function hasVoted(uint256 _campaignId, address _voter) external view returns (bool) {
+        return votes[_campaignId].hasVoted[_voter];
+    }
+
+    function getCampaignGoal(uint256 _id) external view override returns (uint256) {
+        return donationContract.getCampaignGoal(_id);
+    }
+
+    function isDaoMember(address _user) public view returns (bool) {
+        return usersContract.isApprovedUser(_user);
     }
 }

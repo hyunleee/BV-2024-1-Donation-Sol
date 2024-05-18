@@ -1,36 +1,70 @@
 import { SignerWithAddress } from "@nomiclabs/hardhat-ethers/dist/src/signers";
-import { setup } from "./setup";
-import { DaoToken } from "@typechains";
-import { Donation } from "@typechains";
-import { DaoAdmin } from "@typechains";
-import { Users } from "@typechains";
+import { DaoToken, Donation, Users, Dao } from "@typechains";
 import { expect } from "chai";
 import { ethers, network } from "hardhat";
+import { HardhatUtil } from "./utils/hardhat_utils";
 
-describe("다오토큰 컨트랙트 테스트", () => {
-  /* Signer */
+describe("DAO 시스템 전체 테스트", () => {
   let admin: SignerWithAddress;
-  let users: SignerWithAddress[];
-
-  /* 컨트랙트 객체 */
+  let user1: SignerWithAddress;
+  let user2: SignerWithAddress;
+  let member1: SignerWithAddress;
+  let member2: SignerWithAddress;
+  let member3: SignerWithAddress;
+  let member4: SignerWithAddress;
+  let member5: SignerWithAddress;
   let daoToken: DaoToken;
   let donation: Donation;
-  let daoAdmin: DaoAdmin;
-  let user: Users;
+  let userContract: Users;
+  let dao: Dao;
 
-  /* 테스트 스냅샷 */
-  let initialSnapshotId: number;
-  let snapshotId: number;
+  let initialSnapshotId: string;
+  let snapshotId: string;
 
   before(async () => {
-    /* 테스트에 필요한 컨트랙트 및 Signer 정보를 불러오는 함수 */
-    ({ admin, users, daoToken, donation, daoAdmin } = await setup());
-    initialSnapshotId = await network.provider.send("evm_snapshot");
+    [admin, user1, user2, member1, member2, member3, member4, member5] = await ethers.getSigners();
 
-    // 여기서 토큰을 발행
-    const [user] = users;
-    const initialSupply = ethers.utils.parseEther("10000"); // 예시 발행량
-    await daoToken.connect(admin).mint(user.address, initialSupply);
+    const DaoTokenFactory = await ethers.getContractFactory("DaoToken");
+    daoToken = (await DaoTokenFactory.deploy("TestToken", "TT")) as DaoToken;
+    await daoToken.deployed();
+
+    const UsersFactory = await ethers.getContractFactory("Users");
+    userContract = (await UsersFactory.deploy(ethers.constants.AddressZero, daoToken.address)) as Users;
+    await userContract.deployed();
+
+    const DaoFactory = await ethers.getContractFactory("Dao");
+    dao = (await DaoFactory.deploy(daoToken.address, ethers.constants.AddressZero, userContract.address, 3600)) as Dao;
+    await dao.deployed();
+
+    await userContract.setDaoAddress(dao.address);
+    await daoToken.mint(admin.address, ethers.utils.parseEther("100000")); // 충분한 토큰 발행
+    await daoToken.transfer(userContract.address, ethers.utils.parseEther("10000"));
+    await daoToken.transfer(user1.address, ethers.utils.parseEther("10000"));
+    await daoToken.transfer(user2.address, ethers.utils.parseEther("10000"));
+    await daoToken.transfer(member1.address, ethers.utils.parseEther("10000"));
+    await daoToken.transfer(member2.address, ethers.utils.parseEther("10000"));
+    await daoToken.transfer(member3.address, ethers.utils.parseEther("10000"));
+    await daoToken.transfer(member4.address, ethers.utils.parseEther("10000"));
+    await daoToken.transfer(member5.address, ethers.utils.parseEther("10000"));
+
+    const DonationFactory = await ethers.getContractFactory("Donation");
+    donation = (await DonationFactory.deploy(daoToken.address, dao.address)) as Donation;
+    await donation.deployed();
+    await daoToken.transfer(donation.address, ethers.utils.parseEther("10000"));
+
+    // DAO 멤버 요청 및 승인
+    await userContract.connect(member1).requestDaoMembership();
+    await userContract.connect(admin).approveDaoMembership(member1.address);
+    await userContract.connect(member2).requestDaoMembership();
+    await userContract.connect(admin).approveDaoMembership(member2.address);
+    await userContract.connect(member3).requestDaoMembership();
+    await userContract.connect(admin).approveDaoMembership(member3.address);
+    await userContract.connect(member4).requestDaoMembership();
+    await userContract.connect(admin).approveDaoMembership(member4.address);
+    await userContract.connect(member5).requestDaoMembership();
+    await userContract.connect(admin).approveDaoMembership(member5.address);
+
+    initialSnapshotId = await network.provider.send("evm_snapshot");
   });
 
   beforeEach(async () => {
@@ -45,115 +79,184 @@ describe("다오토큰 컨트랙트 테스트", () => {
     await network.provider.send("evm_revert", [initialSnapshotId]);
   });
 
-  //위 내용까지는 건드리면 안되는 코드
-  it("다오 토큰 주소", () => {
-    console.log("다오 토큰 주소:", daoToken.address);
+  describe("DaoToken Tests", () => {
+    it("관리자가 토큰을 발행할 수 있는가?", async () => {
+      const initialBalance = await daoToken.balanceOf(admin.address);
+      await daoToken.connect(admin).mint(admin.address, ethers.utils.parseEther("1000"));
+      const balance = await daoToken.balanceOf(admin.address);
+      expect(balance).to.equal(initialBalance.add(ethers.utils.parseEther("1000")));
+    });
+
+    it("토큰을 다른 주소로 전송할 수 있는가?", async () => {
+      await userContract.connect(user1).exchange({ value: ethers.utils.parseEther("0.5") });
+      const initialBalanceUser1 = await daoToken.balanceOf(user1.address);
+      await daoToken.transfer(user1.address, ethers.utils.parseEther("100"));
+      const balance = await daoToken.balanceOf(user1.address);
+      expect(balance).to.equal(initialBalanceUser1.add(ethers.utils.parseEther("100")));
+    });
+
+    it("토큰을 전송할 수 있는가(approve, transferFrom)?", async () => {
+      await userContract.connect(user1).exchange({ value: ethers.utils.parseEther("0.5") });
+      const initialBalanceUser2 = await daoToken.balanceOf(user2.address);
+      await daoToken.approve(user1.address, ethers.utils.parseEther("100"));
+      await daoToken.connect(user1).transferFrom(admin.address, user2.address, ethers.utils.parseEther("100"));
+      const balance = await daoToken.balanceOf(user2.address);
+      expect(balance).to.equal(initialBalanceUser2.add(ethers.utils.parseEther("100")));
+    });
   });
 
-  it("다오 토큰 이름과 심볼", async () => {
-    const name = await daoToken.name();
-    const symbol = await daoToken.symbol();
+  describe("Users Tests", () => {
+    it("유저가 DAO 회원 승인을 요청할 수 있는가?", async () => {
+      await userContract.connect(user1).requestDaoMembership();
+      const isPending = await userContract.pendingRequests(user1.address);
+      expect(isPending).to.be.true;
+    });
 
-    expect(name).to.equal("TestToken");
-    expect(symbol).to.equal("TT");
+    it("관리자가 DAO 회원 승인 요청을 승인할 수 있는가?", async () => {
+      await userContract.connect(user1).requestDaoMembership();
+      await userContract.connect(admin).approveDaoMembership(user1.address);
+      const isApproved = await userContract.isApprovedUser(user1.address);
+      expect(isApproved).to.be.true;
+    });
+
+    it("유저가 ETH를 DAO 토큰으로 교환할 수 있는가?", async () => {
+      const ethAmount = ethers.utils.parseEther("0.01");
+      await userContract.connect(user1).exchange({ value: ethAmount });
+      const daoBalance = await daoToken.balanceOf(user1.address);
+      const expectedDaoAmount = ethAmount.mul(100).div(ethers.utils.parseEther("0.001"));
+      expect(daoBalance).to.be.gte(expectedDaoAmount);
+    });
   });
 
-  // it("다오 토큰 발행량 확인", async () => {
-  //   const totalSupply = await daoToken.totalSupply();
+  describe("Dao Tests", () => {
+    // it("투표를 시작할 수 있는가?", async () => {
+    //   const goal = ethers.utils.parseEther("100");
+    //   const startAt = (await ethers.provider.getBlock("latest")).timestamp + 10;
+    //   const endAt = startAt + 86400; // 1일 후
 
-  //   // 예상된 발행량을 이용하여 체크
-  //   const expectedTotalSupply = ethers.utils.parseEther("10000"); // 예시 발행량
+    //   await donation.connect(user1).launch(user1.address, goal, startAt, endAt);
+    //   await HardhatUtil.passNSeconds(11); // 캠페인 시작 시간으로 이동
 
-  //   expect(totalSupply).to.equal(expectedTotalSupply);
-  // });
+    //   await dao.connect(member1).startVote(1);
+    //   const voteInfo = await dao.votes(1);
+    //   expect(voteInfo.startTime).to.be.gt(0);
+    // });
 
-  // it("펀딩 승인 요청 확인 및 이벤트 처리 확인", async () => {
-  //   const [user] = users;
-  //   const donationAmount = ethers.utils.parseEther("10");
+    // it("유저가 투표에 참여 & 투표 종료를 할 수 있는가?", async () => {
+    //   const goal = ethers.utils.parseEther("100");
+    //   const startAt = (await ethers.provider.getBlock("latest")).timestamp + 10;
+    //   const endAt = startAt + 86400; // 1일 후
 
-  //   // 초기 잔액 확인 및 토큰 민트
-  //   const initialBalance = await daoToken.balanceOf(user.address);
-  //   await daoToken.connect(admin).mint(user.address, donationAmount);
-  //   const postMintBalance = await daoToken.balanceOf(user.address);
-  //   expect(postMintBalance).to.equal(initialBalance.add(donationAmount));
+    //   await donation.connect(user1).launch(user1.address, goal, startAt, endAt);
+    //   await HardhatUtil.passNSeconds(11); // 캠페인 시작 시간으로 이동
 
-  //   // 펀딩 요청
-  //   await donation.connect(user).requestDonation(donationAmount);
-  //   const userPendingDonation = await donation.pendingDonations(user.address);
-  //   expect(userPendingDonation).to.equal(donationAmount);
+    //   await dao.connect(member1).startVote(1);
+    //   await dao.connect(member2).vote(1, true);
+    //   const hasVoted = await dao.hasVoted(1, member2.address);
+    //   expect(hasVoted).to.be.true;
 
-  //   // 이벤트 확인
-  //   const donationRequestedEvents = await donation.queryFilter(donation.filters.DonationRequested());
-  //   expect(donationRequestedEvents.length).to.equal(1);
-  //   const [event] = donationRequestedEvents;
-  //   expect(event.args.donor).to.equal(user.address);
-  //   expect(event.args.amount).to.equal(donationAmount);
-  // });
+    //   await HardhatUtil.passNSeconds(3600); // 1시간 후
+    //   await dao.connect(admin).finalizeVote(1);
+    //   const voteInfo = await dao.votes(1);
+    //   expect(voteInfo.yesVotes).to.be.gt(0);
+    // });
 
-  // it("펀딩 승인 시 잔량 확인", async () => {
-  //   const [user] = users;
-  //   const donationAmount = ethers.utils.parseEther("10");
+    it("유저를 등록하고 해제할 수 있는가?", async () => {
+      await dao.connect(admin).registerUser(user1.address);
+      const isRegistered = await userContract.isApprovedUser(user1.address);
+      expect(isRegistered).to.be.true;
 
-  //   // 초기 잔액 확인 및 토큰 민트
-  //   const initialBalance = await daoToken.balanceOf(user.address);
-  //   await daoToken.connect(admin).mint(user.address, donationAmount); // 토큰 민트
-  //   const postMintBalance = await daoToken.balanceOf(user.address);
-  //   expect(postMintBalance).to.equal(initialBalance.add(donationAmount));
+      await dao.connect(admin).unregisterUser(user1.address);
+      const isRegisteredAfter = await userContract.isApprovedUser(user1.address);
+      expect(isRegisteredAfter).to.be.false;
+    });
+  });
 
-  //   // 펀딩 요청
-  //   await donation.connect(user).requestDonation(donationAmount);
-  //   const userPendingDonation = await donation.pendingDonations(user.address);
-  //   expect(userPendingDonation).to.equal(donationAmount);
+  describe("Donation Tests", () => {
+    it("유저가 기부 캠페인을 시작할 수 있는가?", async () => {
+      const goal = ethers.utils.parseEther("100");
+      const startAt = (await ethers.provider.getBlock("latest")).timestamp + 10;
+      const endAt = startAt + 86400; // 1일 후
 
-  //   // 펀딩 승인
-  //   // 테스트 전에 사용자가 충분한 양의 토큰을 approve 해야 함
-  //   await daoToken.connect(user).approve(donation.address, donationAmount); // 이 부분 추가
-  //   await donation.connect(admin).approveDonation(user.address);
-  //   const userFinalBalance = await daoToken.balanceOf(user.address);
-  //   const pendingDonationAfterApproval = await donation.pendingDonations(user.address);
+      await donation.connect(user1).launch(user1.address, goal, startAt, endAt);
+      const campaign = await donation.getCampaign(1);
 
-  //   expect(userFinalBalance).to.equal(initialBalance);
-  //   expect(pendingDonationAfterApproval).to.equal(0);
-  // });
+      expect(campaign.creator).to.equal(user1.address);
+      expect(campaign.goal).to.equal(goal);
+      expect(campaign.startAt).to.equal(startAt);
+      expect(campaign.endAt).to.equal(endAt);
+    });
 
-  // it("펀딩 거절 시 맵핑에서 삭제 됐는지 확인", async () => {
-  //   const [user] = users;
-  //   const donationAmount = ethers.utils.parseEther("10");
+    it("유저가 기부 & 기부 취소를 할 수 있는가?", async () => {
+      const goal = ethers.utils.parseEther("100");
+      const startAt = (await ethers.provider.getBlock("latest")).timestamp + 10;
+      const endAt = startAt + 86400; // 1일 후
 
-  //   // 초기 잔액 확인 및 토큰 민트
-  //   const initialBalance = await daoToken.balanceOf(user.address);
-  //   await daoToken.connect(admin).mint(user.address, donationAmount);
-  //   const postMintBalance = await daoToken.balanceOf(user.address);
-  //   expect(postMintBalance).to.equal(initialBalance.add(donationAmount));
+      await donation.connect(user1).launch(user1.address, goal, startAt, endAt);
+      await HardhatUtil.passNSeconds(11); // 캠페인 시작 시간으로 이동
 
-  //   // 펀딩 요청
-  //   await donation.connect(user).requestDonation(donationAmount);
-  //   const userPendingDonation = await donation.pendingDonations(user.address);
-  //   expect(userPendingDonation).to.equal(donationAmount);
+      const pledgeAmount = ethers.utils.parseEther("50");
+      await daoToken.connect(user1).approve(donation.address, pledgeAmount);
+      await donation.connect(user1).pledge(1, pledgeAmount);
 
-  //   // 펀딩 거절
-  //   await donation.connect(admin).rejectDonation(user.address);
-  //   const pendingDonationAfterRejection = await donation.pendingDonations(user.address);
+      const campaign = await donation.getCampaign(1);
+      expect(campaign.pledged).to.equal(pledgeAmount);
 
-  //   expect(pendingDonationAfterRejection).to.equal(0);
-  // });
-  // it("관리자 첫 토큰 민트 받았는지 확인", async () => {
-  //   const [user] = users;
-  //   const donationAmount = ethers.utils.parseEther("10");
+      await donation.connect(user1).unpledge(1, pledgeAmount);
+      const campaignAfterUnpledge = await donation.getCampaign(1);
+      expect(campaignAfterUnpledge.pledged).to.equal(0);
+    });
 
-  //   // 민트 전 잔액 확인
-  //   const initialBalance = await daoToken.balanceOf(user.address);
-  //   console.log("Initial Balance:", initialBalance.toString()); // 디버깅 출력
+    // it("캠페인 목표 달성 시 claim할 수 있는가?", async () => {
+    //   const goal = ethers.utils.parseEther("100");
+    //   const startAt = (await ethers.provider.getBlock("latest")).timestamp + 10;
+    //   const endAt = startAt + 86400; // 1일 후
 
-  //   // 관리자가 토큰 민트
-  //   await daoToken.connect(admin).mint(user.address, donationAmount);
+    //   await donation.connect(user1).launch(user1.address, goal, startAt, endAt);
+    //   await HardhatUtil.passNSeconds(11); // 캠페인 시작 시간으로 이동
 
-  //   // 민트 후 잔액 확인
-  //   const postMintBalance = await daoToken.balanceOf(user.address);
-  //   console.log("Post-Mint Balance:", postMintBalance.toString()); // 디버깅 출력
+    //   const pledgeAmount = ethers.utils.parseEther("100");
+    //   await daoToken.connect(user1).approve(donation.address, pledgeAmount);
+    //   await donation.connect(user1).pledge(1, pledgeAmount);
 
-  //   // 예상 잔액 검증
-  //   const expectedBalance = initialBalance.add(donationAmount);
-  //   expect(postMintBalance.toString()).to.equal(expectedBalance.toString());
-  // });
+    //   await HardhatUtil.passNSeconds(86400); // 1일 후
+
+    //   await donation.connect(user1).claim(1);
+    //   const campaign = await donation.getCampaign(1);
+    //   expect(campaign.claimed).to.be.true;
+    // });
+
+    it("캠페인 목표 미달성 시 refund할 수 있는가?", async () => {
+      const goal = ethers.utils.parseEther("100");
+      const startAt = (await ethers.provider.getBlock("latest")).timestamp + 10;
+      const endAt = startAt + 86400; // 1일 후
+
+      await donation.connect(user1).launch(user1.address, goal, startAt, endAt);
+      await HardhatUtil.passNSeconds(11); // 캠페인 시작 시간으로 이동
+
+      const pledgeAmount = ethers.utils.parseEther("50");
+      await daoToken.connect(user1).approve(donation.address, pledgeAmount);
+      await donation.connect(user1).pledge(1, pledgeAmount);
+
+      await HardhatUtil.passNSeconds(86400); // 1일 후
+
+      await donation.connect(user1).refund(1);
+      const userBalance = await daoToken.balanceOf(user1.address);
+      expect(userBalance).to.equal(ethers.utils.parseEther("10000")); // 초기 잔액과 같아야 함
+    });
+
+    it("캠페인 정보 조회가 가능한가?", async () => {
+      const goal = ethers.utils.parseEther("100");
+      const startAt = (await ethers.provider.getBlock("latest")).timestamp + 10;
+      const endAt = startAt + 86400; // 1일 후
+
+      await donation.connect(user1).launch(user1.address, goal, startAt, endAt);
+      const campaign = await donation.getCampaign(1);
+
+      expect(campaign.creator).to.equal(user1.address);
+      expect(campaign.goal).to.equal(goal);
+      expect(campaign.startAt).to.equal(startAt);
+      expect(campaign.endAt).to.equal(endAt);
+    });
+  });
 });

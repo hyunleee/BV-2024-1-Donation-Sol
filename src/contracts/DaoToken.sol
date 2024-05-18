@@ -1,10 +1,10 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
 import "./common/token/ERC20.sol";
 import "hardhat/console.sol";
-import "./interface/DaoTokenInterface.sol";
 
-contract DaoToken is ERC20, DaoTokenInterface {
+contract DaoToken is ERC20 {
     address public owner;
     address public admin;
 
@@ -16,17 +16,5 @@ contract DaoToken is ERC20, DaoTokenInterface {
     function mint(address to, uint256 amount) public {
         require(msg.sender == admin, "Only the admin can mint tokens");
         _mint(to, amount);
-    }
-
-    function transfer(
-        address targetAddr,
-        uint256 amount
-    ) public virtual override(DaoTokenInterface, ERC20) returns (bool) {
-        _transfer(msg.sender, targetAddr, amount);
-        return true;
-    }
-
-    function balanceOf(address account) public view override(DaoTokenInterface, ERC20) returns (uint256) {
-        return super.balanceOf(account);
     }
 }

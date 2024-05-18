@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "hardhat/console.sol";
-import "./common/token/IERC20.sol";
-import "./DaoToken.sol";
-import "./Dao.sol";
+import "./interface/DaoTokenInterface.sol";
+import "./interface/DaoInterface.sol";
 
 contract Donation {
     address public donationAdmin;
-    Dao public dao;
-    IERC20 public daoToken;
+    DaoInterface public dao;
+    DaoTokenInterface public daoToken;
 
     event Launch(uint256 id, address indexed creator, address target, uint256 goal, uint32 startAt, uint32 endAt);
     event Cancel(uint256 id);
@@ -35,8 +33,8 @@ contract Donation {
 
     constructor(address daoTokenAddr, address daoAddress) {
         donationAdmin = msg.sender;
-        daoToken = IERC20(daoTokenAddr);
-        dao = Dao(daoAddress);
+        daoToken = DaoTokenInterface(daoTokenAddr);
+        dao = DaoInterface(daoAddress);
     }
 
     function launch(address _target, uint256 _goal, uint32 _startAt, uint32 _endAt) external {
@@ -74,7 +72,11 @@ contract Donation {
 
         campaign.pledged += _amount;
         pledgedAmount[_id][msg.sender] += _amount;
-        daoToken.transferFrom(msg.sender, address(this), _amount);
+        require(daoToken.transferFrom(msg.sender, address(this), _amount), "Transfer failed");
+
+        if (campaign.pledged >= campaign.goal) {
+            dao.startVote(_id); // 기부 목표 달성 시 투표 시작
+        }
 
         emit Pledge(_id, msg.sender, _amount);
     }
@@ -85,7 +87,7 @@ contract Donation {
 
         campaign.pledged -= _amount;
         pledgedAmount[_id][msg.sender] -= _amount;
-        daoToken.transfer(msg.sender, _amount);
+        require(daoToken.transfer(msg.sender, _amount), "Transfer failed");
 
         emit Unpledge(_id, msg.sender, _amount);
     }
@@ -107,7 +109,7 @@ contract Donation {
         Campaign storage campaign = campaigns[_id];
         require(campaign.claimed, "Claim not requested");
 
-        daoToken.transfer(campaign.target, campaign.pledged);
+        require(daoToken.transfer(campaign.target, campaign.pledged), "Transfer failed");
 
         emit Claim(_id);
     }
@@ -119,7 +121,7 @@ contract Donation {
 
         uint256 bal = pledgedAmount[_id][msg.sender];
         pledgedAmount[_id][msg.sender] = 0;
-        daoToken.transfer(msg.sender, bal);
+        require(daoToken.transfer(msg.sender, bal), "Transfer failed");
 
         emit Refund(_id, msg.sender, bal);
     }
@@ -149,5 +151,9 @@ contract Donation {
             campaign.endAt,
             campaign.claimed
         );
+    }
+
+    function getCampaignGoal(uint256 _id) external view returns (uint256) {
+        return campaigns[_id].goal;
     }
 }
