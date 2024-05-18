@@ -1,52 +1,51 @@
-import { hardhatInfo } from "@constants";
-import { ethers } from "hardhat";
-import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { DeployFunction } from "hardhat-deploy/types";
 
-/**
- * @dev this script is used for tests and deployments on hardhat network
- * @deployer person who deployed
- * @date deployed date
- * @description summary of this deployment
- */
-
-const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
-  const { deployments } = hre;
+const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
+  const { deployments, getNamedAccounts, ethers } = hre;
   const { deploy } = deployments;
-  const [developer] = await ethers.getSigners();
+  const { deployer } = await getNamedAccounts();
 
-  // DaoToken 컨트랙트 배포
+  // DaoToken 배포
   const daoToken = await deploy("DaoToken", {
-    from: developer.address,
-    contract: "DaoToken",
-    args: [hardhatInfo.daoTokenName, hardhatInfo.daoTokenSymbol],
+    from: deployer,
+    args: ["TestToken", "TT"],
     log: true,
-    autoMine: true,
   });
+  console.log("DaoToken deployed at:", daoToken.address);
 
-  // Funding 컨트랙트 배포
-  const funding = await deploy("Funding", {
-    from: developer.address,
-    contract: "Funding",
-    args: [daoToken.address], // 배포된 DaoToken 컨트랙트의 주소 사용
+  // Dao 배포
+  const dao = await deploy("Dao", {
+    from: deployer,
+    args: [daoToken.address, ethers.constants.AddressZero, 3600], // 예시로 1시간 (3600초)로 설정
     log: true,
-    autoMine: true,
   });
+  console.log("Dao deployed at:", dao.address);
 
-  // DaoAdmin 컨트랙트 배포
+  // Donation 배포
+  const donation = await deploy("Donation", {
+    from: deployer,
+    args: [daoToken.address, dao.address], // 두 개의 인자 전달
+    log: true,
+  });
+  console.log("Donation deployed at:", donation.address);
+
+  // Users 배포
+  const users = await deploy("Users", {
+    from: deployer,
+    args: [dao.address], // Dao 주소 전달
+    log: true,
+  });
+  console.log("Users deployed at:", users.address);
+
+  // DaoAdmin 배포
   const daoAdmin = await deploy("DaoAdmin", {
-    from: developer.address,
-    contract: "DaoAdmin",
-    args: [daoToken.address], // 배포된 DaoToken 컨트랙트의 주소 사용
+    from: deployer,
+    args: [daoToken.address, users.address], // Users 컨트랙트 주소를 전달
     log: true,
-    autoMine: true,
   });
-
-  // 배포된 컨트랙트의 주소 출력
-  console.log("DaoToken deployed to:", daoToken.address);
-  console.log("Funding deployed to:", funding.address);
-  console.log("DaoAdmin deployed to:", daoAdmin.address);
+  console.log("DaoAdmin deployed at:", daoAdmin.address);
 };
 
 export default func;
-func.tags = ["001_deploy_contracts"];
+func.tags = ["all"];

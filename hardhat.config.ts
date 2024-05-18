@@ -1,4 +1,4 @@
-/* eslint-disable node/no-unsupported-features/es-syntax */
+import { HardhatUserConfig } from "hardhat/config";
 import "@typechain/hardhat";
 import "tsconfig-paths/register";
 import "hardhat-deploy";
@@ -7,7 +7,6 @@ import "solidity-coverage";
 import "@openzeppelin/hardhat-upgrades";
 import "hardhat-log-remover";
 import "hardhat-contract-sizer";
-import { HardhatUserConfig } from "hardhat/config";
 import "@nomiclabs/hardhat-etherscan";
 import "@nomiclabs/hardhat-ethers";
 import "@nomiclabs/hardhat-waffle";
@@ -17,9 +16,6 @@ const { NETWORK, DEVELOPER_ACCOUNT, DEVELOPER_PRIVATE_KEY, CHAIN_ID, PROVIDER_UR
 function getDeployPath(): string {
   return `./src/scripts/deploy/${NETWORK}/todo`;
 }
-
-// You need to export an object to set up your config
-// Go to https://hardhat.org/config/ to learn more
 
 const config: HardhatUserConfig = {
   solidity: {
@@ -36,7 +32,9 @@ const config: HardhatUserConfig = {
     ],
   },
   namedAccounts: {
-    developer: 0,
+    deployer: {
+      default: 0, // 이 부분이 중요합니다. 0번째 계정을 deployer로 설정합니다.
+    },
   },
   networks: {
     hardhat: {
