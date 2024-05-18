@@ -4,7 +4,6 @@ import { DaoToken } from "@typechains";
 import { Funding } from "@typechains";
 import { DaoAdmin } from "@typechains";
 import { expect } from "chai";
-import { BigNumber } from "ethers";
 import { ethers, network } from "hardhat";
 
 describe("다오토큰 컨트랙트 테스트", () => {
@@ -66,23 +65,6 @@ describe("다오토큰 컨트랙트 테스트", () => {
     expect(totalSupply).to.equal(expectedTotalSupply);
   });
 
-  // it("펀딩 승인 요청 확인 및 이벤트 처리 확인", async () => {
-
-  //   await daoToken.connect(admin).mintTokens(user.address, donationAmount);
-  //   expect(await daoToken.balanceOf(user.address)).to.equal(donationAmount);
-
-  //   await funding.connect(user).requestDonation(donationAmount);
-
-  //   const userPendingDonation = await funding.pendingDonations(user.address);
-  //   expect(userPendingDonation).to.equal(donationAmount);
-
-  //   const donationRequestedEvents = await funding.queryFilter(funding.filters.DonationRequested());
-  //   expect(donationRequestedEvents.length).to.equal(1);
-
-  //   const [event] = donationRequestedEvents;
-  //   expect(event.args.donor).to.equal(user.address);
-  //   expect(event.args.amount).to.equal(donationAmount);
-  // });
   it("펀딩 승인 요청 확인 및 이벤트 처리 확인", async () => {
     const [user] = users;
     const donationAmount = ethers.utils.parseEther("10");
