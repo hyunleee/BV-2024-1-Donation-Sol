@@ -64,14 +64,6 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     log: true,
   });
   console.log("Donation deployed at:", donation.address);
-
-  // DaoAdmin 배포
-  const daoAdmin = await deploy("DaoAdmin", {
-    from: deployer,
-    args: [daoToken.address, users.address], // Users 컨트랙트 주소를 전달
-    log: true,
-  });
-  console.log("DaoAdmin deployed at:", daoAdmin.address);
 };
 
 export default func;
