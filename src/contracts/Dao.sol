@@ -1,138 +1,171 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "./interface/DaoTokenInterface.sol";
-import "./interface/UsersInterface.sol";
 import "./interface/DaoInterface.sol";
 import "./interface/DonationInterface.sol";
 
 contract Dao is DaoInterface {
-    DaoTokenInterface public daoToken;
-    UsersInterface public usersContract;
-    DonationInterface public donationContract;
     address public admin;
-    uint256 public voteDuration;
+    address[] public daoMemberList;
 
-    event VoteStarted(uint256 indexed campaignId, uint256 endTime);
-    event Voted(uint256 indexed campaignId, address indexed voter, bool vote);
-    event VoteEnded(uint256 indexed campaignId, bool approved);
-    event DaoMembershipApproved(address indexed user);
-    event DaoMembershipRejected(address indexed user);
+    mapping(address => bool) public hasVoted;
+    mapping(address => bool) public isDaoMember;
 
-    struct VoteInfo {
-        uint256 startTime;
-        uint256 endTime;
-        uint256 yesVotes;
-        uint256 noVotes;
-        address[] voters;
-        mapping(address => bool) hasVoted;
-    }
-    mapping(uint256 => VoteInfo) public votes;
+    mapping(uint256 => uint256) public voteCountYes;
+    mapping(uint256 => uint256) public voteCountNo;
 
-    constructor(address _daoToken, address _donationContract, address _usersContract, uint256 _voteDuration) {
+    mapping(uint256 => bool) public voteInProgress;
+
+    MembershipRequest[] public membershipRequests;
+
+    DonationInterface public donation;
+
+    event VoteStarted(uint256 campaignId);
+    event Voted(uint256 campaignId, address voter, bool agree);
+
+    event VoteEnded_approve(uint256 campaignId, uint256 agreePercentage, string message);
+    event VoteEnded_reject(uint256 campaignId, uint256 agreePercentage, string message);
+
+    event DaoMembershipRequested(address indexed user, string message);
+    event RejectDaoMembershipRequested(address indexed user, string message);
+
+    event DaoMembershipApproved(address indexed user, string message);
+    event DaoMembershipRejected(address indexed user, string message);
+
+    constructor(address _donation) {
         admin = msg.sender;
-        daoToken = DaoTokenInterface(_daoToken);
-        donationContract = DonationInterface(_donationContract);
-        usersContract = UsersInterface(_usersContract);
-        voteDuration = _voteDuration;
+        donation = DonationInterface(_donation);
     }
 
     modifier onlyAdmin() {
-        require(msg.sender == admin, "Only the admin can perform this action");
+        require(msg.sender == admin, "Only admin can perform this action");
         _;
     }
 
     modifier onlyDaoMember() {
-        require(usersContract.isApprovedUser(msg.sender), "Only DAO members can perform this action");
+        require(isDaoMember[msg.sender], "Only DAO members can perform this action");
         _;
     }
 
-    // Dao membership approval and rejection
-    function approveDaoMembership(address _user) external override onlyAdmin {
-        usersContract.approveDaoMembership(_user);
-        emit DaoMembershipApproved(_user);
+    function startVote(uint256 _campaignId) external onlyAdmin {
+        uint256 goal = donation.getCampaignGoal(_campaignId);
+        uint256 totalAmount = donation.getCampaignTotalAmount(_campaignId);
+        require(totalAmount == goal, "The amount raised is less than the goal amount.");
+        require(!voteInProgress[_campaignId], "A vote is already in progress for this campaign.");
+
+        emit VoteStarted(_campaignId);
+
+        for (uint i = 0; i < daoMemberList.length; i++) {
+            address voter = daoMemberList[i];
+            hasVoted[voter] = false; //모든 다오 멤버가 다시 투표할 수 있는 상태로 만들어 줌!!
+        }
+        voteCountYes[_campaignId] = 0;
+        voteCountNo[_campaignId] = 0;
+        voteInProgress[_campaignId] = true;
     }
 
-    function rejectDaoMembership(address _user) external override onlyAdmin {
-        usersContract.rejectDaoMembership(_user);
-        emit DaoMembershipRejected(_user);
-    }
+    function vote(uint256 _campaignId, bool _agree) public onlyDaoMember {
+        require(voteInProgress[_campaignId], "No vote in progress for this campaign.");
+        require(!hasVoted[msg.sender], "You have already voted.");
 
-    // Voting functions
-    function startVote(uint256 _campaignId) external override onlyDaoMember {
-        uint256 goal = donationContract.getCampaignGoal(_campaignId);
-        require(goal > 0, "Campaign does not exist");
-        require(votes[_campaignId].startTime == 0, "Vote already started");
+        hasVoted[msg.sender] = true;
 
-        uint256 endTime = block.timestamp + voteDuration;
-
-        VoteInfo storage voteInfo = votes[_campaignId];
-
-        voteInfo.startTime = block.timestamp;
-        voteInfo.endTime = endTime;
-        voteInfo.yesVotes = 0;
-        voteInfo.noVotes = 0;
-
-        emit VoteStarted(_campaignId, endTime);
-    }
-
-    function vote(uint256 _campaignId, bool _support) external onlyDaoMember returns (bool) {
-        VoteInfo storage voteInfo = votes[_campaignId];
-        require(block.timestamp >= voteInfo.startTime, "Vote not started");
-        require(block.timestamp <= voteInfo.endTime, "Vote ended");
-        require(!voteInfo.hasVoted[msg.sender], "Already voted");
-
-        voteInfo.hasVoted[msg.sender] = true;
-
-        if (_support) {
-            voteInfo.yesVotes += daoToken.balanceOf(msg.sender);
+        if (_agree) {
+            voteCountYes[_campaignId] += 1;
         } else {
-            voteInfo.noVotes += daoToken.balanceOf(msg.sender);
+            voteCountNo[_campaignId] += 1;
         }
 
-        emit Voted(_campaignId, msg.sender, _support);
+        emit Voted(_campaignId, msg.sender, _agree);
 
-        if (block.timestamp >= voteInfo.endTime) {
-            return finalizeVote(_campaignId);
+        if (allMembersVoted()) {
+            voteEnd(_campaignId);
+        }
+    }
+
+    function allMembersVoted() internal view returns (bool) {
+        for (uint i = 0; i < daoMemberList.length; i++) {
+            if (!hasVoted[daoMemberList[i]]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    function voteEnd(uint256 _campaignId) internal {
+        uint256 totalVotes = voteCountYes[_campaignId] + voteCountNo[_campaignId];
+        uint256 agreePercentage = (voteCountYes[_campaignId] * 100) / totalVotes;
+
+        voteInProgress[_campaignId] = false;
+
+        if (agreePercentage >= 70) {
+            donation.claim(_campaignId);
+            emit VoteEnded_approve(_campaignId, agreePercentage, "The campaign has been approved for claim.");
+        } else {
+            emit VoteEnded_reject(_campaignId, agreePercentage, "The campaign was declined for claim.");
         }
 
-        return false;
+        donation.claim(_campaignId);
     }
 
-    function finalizeVote(uint256 _campaignId) public override returns (bool) {
-        VoteInfo storage voteInfo = votes[_campaignId];
-        require(block.timestamp > voteInfo.endTime, "Vote not ended");
+    function requestDaoMembership() external {
+        require(!isDaoMember[msg.sender], "User is already a DAO member");
 
-        uint256 totalVotes = voteInfo.yesVotes + voteInfo.noVotes;
-        bool approved = voteInfo.yesVotes * 100 >= totalVotes * 70;
+        membershipRequests.push(MembershipRequest(msg.sender, true));
 
-        emit VoteEnded(_campaignId, approved);
-
-        return approved;
+        emit DaoMembershipRequested(msg.sender, "User has requested DAO membership");
     }
 
-    // User registration functions
-    function registerUser(address _user) external override {
-        usersContract.registerUser(_user);
+    function requestRejectDaoMembership() external {
+        require(isDaoMember[msg.sender], "User is already a DAO member");
+
+        membershipRequests.push(MembershipRequest(msg.sender, false));
+
+        emit RejectDaoMembershipRequested(msg.sender, "User has requested to leave DAO membership");
     }
 
-    function unregisterUser(address _user) public override {
-        usersContract.unregisterUser(_user);
+    function approveDaoMembership(address _user, bool _approve) external onlyAdmin {
+        if (_approve) {
+            daoMemberList.push(_user);
+            isDaoMember[_user] = true;
+            emit DaoMembershipApproved(_user, "User has been approved as a DAO member");
+        } else {
+            emit DaoMembershipRejected(_user, "User has been rejected as a DAO member");
+        }
+
+        _removeMembershipRequest(_user);
     }
 
-    function requestUnregister() external {
-        unregisterUser(msg.sender);
+    function rejectDaoMembership(address _user) external onlyAdmin {
+        require(isDaoMember[_user], "User is not a DAO member");
+        for (uint i = 0; i < daoMemberList.length; i++) {
+            if (daoMemberList[i] == _user) {
+                daoMemberList[i] = daoMemberList[daoMemberList.length - 1];
+                daoMemberList.pop();
+                break;
+            }
+        }
+        isDaoMember[_user] = false;
+        emit DaoMembershipRejected(_user, "User has been rejected as a DAO member");
+
+        _removeMembershipRequest(_user);
     }
 
-    function hasVoted(uint256 _campaignId, address _voter) external view returns (bool) {
-        return votes[_campaignId].hasVoted[_voter];
+    function _removeMembershipRequest(address _user) internal {
+        for (uint i = 0; i < membershipRequests.length; i++) {
+            if (membershipRequests[i].user == _user) {
+                membershipRequests[i] = membershipRequests[membershipRequests.length - 1];
+                membershipRequests.pop();
+                break;
+            }
+        }
     }
 
-    function getCampaignGoal(uint256 _id) external view override returns (uint256) {
-        return donationContract.getCampaignGoal(_id);
+    function getMembershipRequests() external view onlyAdmin returns (MembershipRequest[] memory) {
+        return membershipRequests;
     }
 
-    function isDaoMember(address _user) public view returns (bool) {
-        return usersContract.isApprovedUser(_user);
+    function getDaoList() external view onlyAdmin returns (address[] memory) {
+        return daoMemberList;
     }
 }
