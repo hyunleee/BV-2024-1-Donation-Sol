@@ -14,7 +14,7 @@ contract DaoToken is ERC20 {
     event TokensWithdrawn(address indexed target, uint256 amountOfETH);
 
     modifier onlyAdmin() {
-        require(msg.sender == admin, "Only admin can can mint tokens");
+        require(msg.sender == admin, "Only admin can mint tokens");
         _;
     }
 
@@ -31,24 +31,32 @@ contract DaoToken is ERC20 {
     }
 
     function buyTokens() external payable {
-        require(msg.value == ETH_AMOUNT, "You must send exactly 0.001 ETH");
+        require(msg.value > 0, "You must send ETH to buy tokens");
+        require(msg.sender.balance >= msg.value, "Insufficient balance");
 
-        uint256 tokensToMint = ETH_TO_DAO_RATE * 10 ** decimals();
+        uint256 tokensToMint = (msg.value * ETH_TO_DAO_RATE * 10 ** uint256(decimals())) / (0.001 ether);
         _mint(msg.sender, tokensToMint);
 
         emit TokensPurchased(msg.sender, msg.value, tokensToMint);
     }
 
-    function withdrawETH(address payable _target, uint256 _amount) external onlyAdmin {
-        require(address(this).balance >= _amount, "Insufficient contract balance");
+    function sellTokens(uint256 amount) external {
+        require(amount > 0, "You must sell at least some tokens");
+        require(balanceOf(msg.sender) >= amount, "Insufficient balance");
 
-        _target.transfer(_amount);
+        uint256 ethToTransfer = ((amount * ETH_AMOUNT) / ETH_TO_DAO_RATE) / 10 ** uint256(decimals());
+        _burn(msg.sender, amount);
 
-        emit TokensWithdrawn(_target, _amount);
+        payable(msg.sender).transfer(ethToTransfer);
+
+        emit TokensWithdrawn(msg.sender, ethToTransfer);
     }
 
     // 컨트랙트의 잔액 조회 함수 (테스트 코드에 활용하기 위해서 추가함)
     function getContractBalance() external view returns (uint256) {
         return address(this).balance;
     }
+
+    //컨트랙트가 ETH를 받을 수 있도록 recieve 함수 구현
+    receive() external payable {}
 }

@@ -7,6 +7,6 @@ interface DaoTokenInterface {
     function balanceOf(address account) external view returns (uint256);
     function mint(address to, uint256 amount) external;
     function buyTokens() external view returns (uint256);
-    function withdrawETH(address payable _target, uint256 _amount) external;
+    function sellTokens(uint256 amount) external view returns (uint256);
     function getContractBalance() external view returns (uint256);
 }

@@ -86,11 +86,11 @@ contract Donation {
 
     function cancel(uint256 _id) external {
         Campaign memory campaign = campaigns[_id];
-        require(campaign.creator == msg.sender, "not creator");
+        require(msg.sender == campaign.creator, "not creator");
         require(block.timestamp < campaign.startAt, "started");
 
         delete campaigns[_id];
-        delete isEnded[_id];
+        isEnded[_id] = true;
         emit Cancel(_id);
     }
 
