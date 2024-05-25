@@ -98,10 +98,11 @@ contract Donation {
         Campaign storage campaign = campaigns[_id];
         require(block.timestamp >= campaign.startAt, "not started");
         require(isEnded[_id] == false, "ended");
+        require(_amount > 0, "Amount must be greater than zero");
 
         campaign.pledged += _amount;
         pledgedAmount[_id][msg.sender] += _amount;
-        require(daoToken.transferFrom(msg.sender, address(this), _amount), "Transfer failed");
+        daoToken.transferFrom(msg.sender, campaign.creator, _amount);
 
         if (campaign.pledged >= campaign.goal) {
             dao.startVote(_id); // 기부 목표 달성 시 투표 시작
@@ -113,11 +114,12 @@ contract Donation {
 
     function unpledge(uint256 _id, uint256 _amount) external {
         Campaign storage campaign = campaigns[_id];
+        require(_amount > 0, "Amount must be greater than zero");
         require(isEnded[_id] == false, "ended");
 
         campaign.pledged -= _amount;
         pledgedAmount[_id][msg.sender] -= _amount;
-        require(daoToken.transfer(msg.sender, _amount), "Transfer failed");
+        daoToken.transfer(msg.sender, _amount);
 
         emit Unpledge(_id, msg.sender, _amount);
     }
