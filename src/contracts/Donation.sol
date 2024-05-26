@@ -3,59 +3,40 @@ pragma solidity ^0.8.19;
 
 import "./interface/DaoTokenInterface.sol";
 import "./interface/DaoInterface.sol";
+import "./interface/DonationInterface.sol";
 
-contract Donation {
+contract Donation is DonationInterface {
     address public admin;
     uint256 public count;
 
     mapping(uint256 => Campaign) public campaigns; // id => Campaign
-    mapping(uint256 => mapping(address => uint256)) public pledgedAmount;
-    mapping(uint256 => bool) public isEnded; //캠페인 종료 여부 (목표 금액 도달 or 시간 종료 시 true)
+    mapping(uint256 => mapping(address => uint256)) public pledgedUserToAmount;
 
     DaoInterface public dao;
     DaoTokenInterface public daoToken;
-
-    event Launch(
-        uint256 id,
-        address indexed creator,
-        address target,
-        string title,
-        string description,
-        uint256 goal,
-        uint32 startAt,
-        uint32 endAt,
-        bool isEnded
-    );
-    event Cancel(uint256 id, bool isEnded);
-    event Pledge(uint256 indexed id, address indexed caller, uint256 amount, uint256 totalAmount);
-    event Unpledge(uint256 indexed id, address indexed caller, uint256 amount, uint256 totalAmount);
-    event Claim(uint256 id, bool claimed);
-    event Refund(uint256 id, address indexed caller, uint256 amount);
-
-    struct Campaign {
-        address creator;
-        address target;
-        string title;
-        string description;
-        uint256 goal;
-        uint256 pledged;
-        uint32 startAt;
-        uint32 endAt;
-        bool claimed;
-    }
 
     constructor(address daoTokenAddr) {
         admin = msg.sender;
         daoToken = DaoTokenInterface(daoTokenAddr);
     }
 
-    function setDaoAddress(address _daoAddr) external onlyAdmin {
-        dao = DaoInterface(_daoAddr);
+    function setDaoAddress(DaoInterface _dao) external onlyAdmin {
+        dao = _dao;
     }
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "Only admin can perform this action");
         _;
+    }
+
+    modifier onlyDao() {
+        require(msg.sender == address(dao), "Only DAO contract can perform this action");
+        _;
+    }
+
+    function getIsEnded(uint256 _campaignId) public view returns (bool) {
+        Campaign memory campaign = campaigns[_campaignId];
+        return block.timestamp >= campaign.endAt || campaign.pledged >= campaign.goal;
     }
 
     function launch(
@@ -83,120 +64,83 @@ contract Donation {
             claimed: false
         });
 
-        isEnded[count] = false;
-
-        emit Launch(count, msg.sender, _target, _title, _description, _goal, _startAt, _endAt, isEnded[count]);
+        emit Launch(count, campaigns[count]);
     }
 
-    function cancel(uint256 _id) external {
-        Campaign memory campaign = campaigns[_id];
+    function cancel(uint256 _campaignId) external {
+        Campaign memory campaign = campaigns[_campaignId];
         require(msg.sender == campaign.creator, "not creator");
         require(block.timestamp < campaign.startAt, "started");
 
-        delete campaigns[_id];
-        isEnded[_id] = true;
-        emit Cancel(_id, isEnded[_id]);
+        delete campaigns[_campaignId];
+        emit Cancel(_campaignId);
     }
 
-    function pledge(uint256 _id, uint256 _amount) external {
-        Campaign storage campaign = campaigns[_id];
+    function pledge(uint256 _campaignId, uint256 _amount) external {
+        Campaign storage campaign = campaigns[_campaignId];
         require(block.timestamp >= campaign.startAt, "not started");
-        require(isEnded[_id] == false, "ended");
+        require(!getIsEnded(_campaignId), "Campaign ended");
         require(_amount > 0, "Amount must be greater than zero");
+        require(dao != DaoInterface(address(0)), "Dao address not set");
 
         campaign.pledged += _amount;
-        pledgedAmount[_id][msg.sender] += _amount;
-        require(daoToken.transferFrom(msg.sender, address(this), _amount), "Transfer failed");
+        pledgedUserToAmount[_campaignId][msg.sender] += _amount;
+        daoToken.transferFrom(msg.sender, address(this), _amount);
 
         if (campaign.pledged >= campaign.goal) {
-            isEnded[_id] = true;
-            dao.startVote(_id); // 기부 목표 달성 시 투표 시작
+            dao.startVote(_campaignId); // 기부 목표 달성 시 투표 시작
         }
 
-        emit Pledge(_id, msg.sender, _amount, campaign.pledged);
+        emit Pledge(_campaignId, msg.sender, _amount, campaign.pledged);
     }
 
-    function unpledge(uint256 _id, uint256 _amount) external {
-        Campaign storage campaign = campaigns[_id];
+    function unpledge(uint256 _campaignId, uint256 _amount) external {
+        Campaign storage campaign = campaigns[_campaignId];
         require(_amount > 0, "Amount must be greater than zero");
-        require(isEnded[_id] == false, "ended");
+        require(!getIsEnded(_campaignId), "Campaign ended");
 
         campaign.pledged -= _amount;
-        pledgedAmount[_id][msg.sender] -= _amount;
-        require(daoToken.transfer(msg.sender, _amount), "Transfer failed");
+        pledgedUserToAmount[_campaignId][msg.sender] -= _amount;
+        daoToken.transfer(msg.sender, _amount);
 
-        emit Unpledge(_id, msg.sender, _amount, campaign.pledged);
+        emit Unpledge(_campaignId, msg.sender, _amount, campaign.pledged);
     }
 
-    function claim(uint256 _id) external {
-        Campaign storage campaign = campaigns[_id];
-        require(campaign.creator == msg.sender, "not creator");
-        require(isEnded[_id] == true, "not ended");
+    function claim(uint256 _campaignId) external onlyDao {
+        require(getIsEnded(_campaignId), "Campaign not ended");
+
+        Campaign storage campaign = campaigns[_campaignId];
         require(!campaign.claimed, "claimed");
 
-        require(daoToken.transfer(campaign.target, campaign.pledged), "Transfer failed");
+        daoToken.transfer(campaign.target, campaign.pledged);
         campaign.claimed = true;
 
-        emit Claim(_id, campaign.claimed);
+        emit Claim(_campaignId, campaign.claimed, campaign.pledged);
     }
 
-    function refund(uint256 _id) external {
-        require(isEnded[_id] == false, "ended");
+    function refund(uint256 _campaignId) external {
+        require(getIsEnded(_campaignId), "Campaign not ended");
 
-        uint256 bal = pledgedAmount[_id][msg.sender];
-        pledgedAmount[_id][msg.sender] = 0;
-        require(daoToken.transfer(msg.sender, bal), "Transfer failed");
+        uint256 bal = pledgedUserToAmount[_campaignId][msg.sender];
+        pledgedUserToAmount[_campaignId][msg.sender] = 0;
+        daoToken.transfer(msg.sender, bal);
 
-        emit Refund(_id, msg.sender, bal);
+        emit Refund(_campaignId, msg.sender, bal);
     }
 
-    function getCampaign(
-        uint256 _id
-    )
-        external
-        view
-        returns (
-            address creator,
-            address target,
-            uint256 goal,
-            uint256 pledged,
-            uint32 startAt,
-            uint32 endAt,
-            bool claimed
-        )
-    {
-        Campaign storage campaign = campaigns[_id];
-        return (
-            campaign.creator,
-            campaign.target,
-            campaign.goal,
-            campaign.pledged,
-            campaign.startAt,
-            campaign.endAt,
-            campaign.claimed
-        );
+    function getCampaign(uint256 _campaignId) external view returns (Campaign memory) {
+        return campaigns[_campaignId];
     }
 
-    // isEnded: true => 캠페인 종료, false => 캠페인 진행중
-    function getIsEnded(uint256 _id) external returns (bool) {
-        if (campaigns[_id].pledged >= campaigns[_id].goal) {
-            isEnded[_id] = true;
-        } else if (block.timestamp > campaigns[_id].endAt) {
-            isEnded[_id] = true;
-        }
-
-        return isEnded[_id];
+    function getCampaignCreator(uint256 _campaignId) external view returns (address) {
+        return campaigns[_campaignId].creator;
     }
 
-    function getCampaignCreator(uint256 _id) external view returns (address) {
-        return campaigns[_id].creator;
+    function getCampaignGoal(uint256 _campaignId) external view returns (uint256) {
+        return campaigns[_campaignId].goal;
     }
 
-    function getCampaignGoal(uint256 _id) external view returns (uint256) {
-        return campaigns[_id].goal;
-    }
-
-    function getCampaignTotalAmount(uint256 _id) external view returns (uint256) {
-        return campaigns[_id].pledged;
+    function getCampaignTotalAmount(uint256 _campaignId) external view returns (uint256) {
+        return campaigns[_campaignId].pledged;
     }
 }

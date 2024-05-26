@@ -1,46 +1,46 @@
+import { hardhatInfo } from "@constants";
 import { ethers } from "hardhat";
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
-import { get } from "lodash";
-
-/**
- * @dev this script is used for tests and deployments on hardhat network
- * @deployer person who deployed
- * @date deployed date
- * @description summary of this deployment
- */
 
 const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
   const { deployments } = hre;
   const { deploy } = deployments;
   const [developer] = await ethers.getSigners();
 
-  const daoToken = await deploy("DaoToken", {
+  const DaoTokenContract = await deploy("DaoToken", {
     from: developer.address,
     contract: "DaoToken",
-    args: [],
+    args: [hardhatInfo.daoTokenName, hardhatInfo.daoTokenSymbol, hardhatInfo.exchangeRate, hardhatInfo.initialSupply],
     log: true,
     autoMine: true,
   });
 
-  const donation = await deploy("Donation", {
+  const DonationContract = await deploy("Donation", {
     from: developer.address,
     contract: "Donation",
-    args: [daoToken.address],
+    args: [DaoTokenContract.address],
     log: true,
     autoMine: true,
   });
 
-  const dao = await deploy("Dao", {
+  const DaoContract = await deploy("Dao", {
     from: developer.address,
     contract: "Dao",
-    args: [donation.address],
+    proxy: {
+      execute: {
+        init: {
+          methodName: "initialize",
+          args: [DaoTokenContract.address, DonationContract.address],
+        },
+      },
+    },
     log: true,
     autoMine: true,
   });
 
-  const donationContract = await ethers.getContractAt("Donation", donation.address);
-  await donationContract.connect(developer).setDaoAddress(dao.address);
+  const donation = await ethers.getContractAt("Donation", DonationContract.address);
+  await donation.connect(developer).setDaoAddress(DaoContract.address);
 };
 
 export default func;
