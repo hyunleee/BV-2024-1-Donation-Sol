@@ -35,6 +35,8 @@ interface DonationInterface {
             uint256 totalAmount,
             bool claimed
         );
+    function getIsEnded(uint256 _id) external view returns (bool);
+    function getCampaignCreator(uint256 _id) external view returns (address);
     function getCampaignGoal(uint256 _id) external view returns (uint256);
     function getCampaignTotalAmount(uint256 _id) external view returns (uint256);
 }

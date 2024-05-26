@@ -20,7 +20,8 @@ contract Dao is DaoInterface {
 
     DonationInterface public donation;
 
-    event VoteStarted(uint256 campaignId);
+    event VoteStarted(uint256 campaignId, uint256 goal, uint256 totalAmount);
+    event VoteReady(uint256 campaignId, uint256 voteCountYes, uint256 voteCountNo, bool voteInProgress);
     event Voted(uint256 campaignId, address voter, bool agree);
 
     event VoteEnded_approve(uint256 campaignId, uint256 agreePercentage, string message);
@@ -29,8 +30,8 @@ contract Dao is DaoInterface {
     event DaoMembershipRequested(address indexed user, string message);
     event RejectDaoMembershipRequested(address indexed user, string message);
 
-    event DaoMembershipApproved(address indexed user, string message);
-    event DaoMembershipRejected(address indexed user, string message);
+    event DaoMembershipApproved(address indexed user, bool isDaoMember, string message);
+    event DaoMembershipRejected(address indexed user, bool isDaoMember, string message);
 
     constructor(address _donation) {
         admin = msg.sender;
@@ -47,13 +48,12 @@ contract Dao is DaoInterface {
         _;
     }
 
-    function startVote(uint256 _campaignId) external onlyAdmin {
+    function startVote(uint256 _campaignId) external {
         uint256 goal = donation.getCampaignGoal(_campaignId);
         uint256 totalAmount = donation.getCampaignTotalAmount(_campaignId);
-        require(totalAmount == goal, "The amount raised is less than the goal amount.");
         require(!voteInProgress[_campaignId], "A vote is already in progress for this campaign.");
 
-        emit VoteStarted(_campaignId);
+        emit VoteStarted(_campaignId, goal, totalAmount);
 
         for (uint i = 0; i < daoMemberList.length; i++) {
             address voter = daoMemberList[i];
@@ -62,8 +62,9 @@ contract Dao is DaoInterface {
         voteCountYes[_campaignId] = 0;
         voteCountNo[_campaignId] = 0;
         voteInProgress[_campaignId] = true;
-    }
 
+        emit VoteReady(_campaignId, voteCountYes[_campaignId], voteCountNo[_campaignId], voteInProgress[_campaignId]);
+    }
     function vote(uint256 _campaignId, bool _agree) public onlyDaoMember {
         require(voteInProgress[_campaignId], "No vote in progress for this campaign.");
         require(!hasVoted[msg.sender], "You have already voted.");
@@ -99,13 +100,14 @@ contract Dao is DaoInterface {
         voteInProgress[_campaignId] = false;
 
         if (agreePercentage >= 70) {
-            donation.claim(_campaignId);
+            // 캠페인 생성자만 claim을 호출할 수 있도록 수정
+            address creator = donation.getCampaignCreator(_campaignId);
+            (bool success, ) = creator.call(abi.encodeWithSignature("claim(uint256)", _campaignId));
+            require(success, "Claim failed");
             emit VoteEnded_approve(_campaignId, agreePercentage, "The campaign has been approved for claim.");
         } else {
             emit VoteEnded_reject(_campaignId, agreePercentage, "The campaign was declined for claim.");
         }
-
-        donation.claim(_campaignId);
     }
 
     function requestDaoMembership() external {
@@ -117,7 +119,7 @@ contract Dao is DaoInterface {
     }
 
     function requestRejectDaoMembership() external {
-        require(isDaoMember[msg.sender], "User is already a DAO member");
+        require(isDaoMember[msg.sender], "User is not a DAO member");
 
         membershipRequests.push(MembershipRequest(msg.sender, false));
 
@@ -128,9 +130,9 @@ contract Dao is DaoInterface {
         if (_approve) {
             daoMemberList.push(_user);
             isDaoMember[_user] = true;
-            emit DaoMembershipApproved(_user, "User has been approved as a DAO member");
+            emit DaoMembershipApproved(_user, isDaoMember[_user], "User has been approved as a DAO member");
         } else {
-            emit DaoMembershipRejected(_user, "User has been rejected as a DAO member");
+            emit DaoMembershipRejected(_user, isDaoMember[_user], "User has been rejected as a DAO member");
         }
 
         _removeMembershipRequest(_user);
@@ -146,7 +148,7 @@ contract Dao is DaoInterface {
             }
         }
         isDaoMember[_user] = false;
-        emit DaoMembershipRejected(_user, "User has been rejected as a DAO member");
+        emit DaoMembershipRejected(_user, isDaoMember[_user], "User has been rejected as a DAO member");
 
         _removeMembershipRequest(_user);
     }

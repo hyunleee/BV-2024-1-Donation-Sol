@@ -1,6 +1,7 @@
 import { ethers } from "hardhat";
 import { DeployFunction } from "hardhat-deploy/types";
 import { HardhatRuntimeEnvironment } from "hardhat/types";
+import { get } from "lodash";
 
 /**
  * @dev this script is used for tests and deployments on hardhat network
@@ -30,13 +31,16 @@ const func: DeployFunction = async (hre: HardhatRuntimeEnvironment) => {
     autoMine: true,
   });
 
-  await deploy("Dao", {
+  const dao = await deploy("Dao", {
     from: developer.address,
     contract: "Dao",
     args: [donation.address],
     log: true,
     autoMine: true,
   });
+
+  const donationContract = await ethers.getContractAt("Donation", donation.address);
+  await donationContract.connect(developer).setDaoAddress(dao.address);
 };
 
 export default func;
