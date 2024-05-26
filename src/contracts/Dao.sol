@@ -19,8 +19,6 @@ contract Dao is DaoInterface, Initializable {
     /// @notice DAO 가입시 필요한 DAO 토큰 수량
     uint256 public daoMembershipAmount;
 
-    // NOTE: 필수는 아니고 시간이 되면 정족수(quorum)을 추가해두면 좋을듯!
-
     /// @notice DAO 멤버 리스트
     address[] public daoMemberList;
 

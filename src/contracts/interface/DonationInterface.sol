@@ -21,7 +21,7 @@ interface DonationInterface {
         uint256 _goal,
         uint32 _startAt,
         uint32 _endAt
-    ) external;
+    ) external virtual;
 
     function cancel(uint256 _campaignId) external;
 
