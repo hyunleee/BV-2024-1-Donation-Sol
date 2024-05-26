@@ -2,7 +2,18 @@
 pragma solidity ^0.8.19;
 
 interface DonationInterface {
-    //캠패인 관련 기능
+    struct Campaign {
+        address creator;
+        address target;
+        string title;
+        string description;
+        uint256 goal;
+        uint256 pledged;
+        uint32 startAt;
+        uint32 endAt;
+        bool claimed;
+    }
+
     function launch(
         address _target,
         string memory _title,
@@ -11,32 +22,37 @@ interface DonationInterface {
         uint32 _startAt,
         uint32 _endAt
     ) external;
-    function cancel(uint256 _id) external;
-    function pledge(uint256 _id, uint256 _amount) external;
-    function unpledge(uint256 _id, uint256 _amount) external;
-    function claim(uint256 _id) external;
-    function refund(uint256 _id) external;
 
-    //캠패인 정보 조회 기능
-    function getCampaign(
-        uint256 _id
-    )
-        external
-        view
-        returns (
-            address creator,
-            address target,
-            string memory title,
-            string memory description,
-            uint256 goal,
-            uint256 pledged,
-            uint32 startAt,
-            uint32 endAt,
-            uint256 totalAmount,
-            bool claimed
-        );
-    function getIsEnded(uint256 _id) external view returns (bool);
-    function getCampaignCreator(uint256 _id) external view returns (address);
-    function getCampaignGoal(uint256 _id) external view returns (uint256);
-    function getCampaignTotalAmount(uint256 _id) external view returns (uint256);
+    function cancel(uint256 _campaignId) external;
+
+    function pledge(uint256 _campaignId, uint256 _amount) external;
+
+    function unpledge(uint256 _campaignId, uint256 _amount) external;
+
+    function claim(uint256 _campaignId) external;
+
+    function refund(uint256 _campaignId) external;
+
+    /// @notice 캠페인 정보를 조회
+    function getCampaign(uint256 _campaignId) external view returns (Campaign memory);
+
+    function getIsEnded(uint256 _campaignId) external view returns (bool);
+
+    function getCampaignCreator(uint256 _campaignId) external view returns (address);
+
+    function getCampaignGoal(uint256 _campaignId) external view returns (uint256);
+
+    function getCampaignTotalAmount(uint256 _campaignId) external view returns (uint256);
+
+    event Launch(uint256 campaignId, Campaign launchedCampaign);
+
+    event Cancel(uint256 indexed campaignId);
+
+    event Pledge(uint256 indexed campaignId, address indexed caller, uint256 amount, uint256 totalAmount);
+
+    event Unpledge(uint256 indexed campaignId, address indexed caller, uint256 amount, uint256 totalAmount);
+
+    event Claim(uint256 indexed campaignId, bool claimed, uint256 amount);
+
+    event Refund(uint256 indexed campaignId, address indexed caller, uint256 amount);
 }
